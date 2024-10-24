@@ -36,8 +36,8 @@ class Doctor(db.Model, SerializerMixin):
     experience = db.Column(db.String, nullable=False)
     about = db.Column(db.String, nullable=False)
     available = db.Column(db.Boolean, nullable=False, default=True)
-    fees = db.Column(db.Numeric, nullable=False)
-    date = db.Column(db.String, nullable=False, default=datetime.now().date)
+    fees = db.Column(db.Numeric(10,2), nullable=False)
+    date = db.Column(db.String, nullable=False, default=datetime.now().date())
     slots_booked = db.Column(db.JSON, nullable=False, default={})
 
     address_id = db.Column(db.Integer, db.ForeignKey('doc_addresses.id'), nullable=False)
@@ -69,8 +69,11 @@ class Doctor(db.Model, SerializerMixin):
         return f'<Doctor {self.name}>'
     
     
+    
 class User(db.Model, SerializerMixin):
     __tablename__ = 'users'
+
+    serialize_rules = ( '-password')
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False)
@@ -81,9 +84,63 @@ class User(db.Model, SerializerMixin):
     gender = db.Column(db.String, default='Not Selected')
     dob = db.Column(db.String, default='Not Selected')
     phone = db.Column(db.String, default='0000000000')
-    role = db.Column(db.String, nullable=False, default='user')
+
+    @validates('email')
+    def validate_email(self, key, email):
+        # Regex for validating an Email
+        email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+        
+        if not re.match(email_regex, email):
+            raise ValueError("Invalid email format")
+        return email
+    
+    @validates('password')
+    def validate_password(self, key, password):
+        if (len(password) < 8 or 
+            not re.search(r'[A-Z]', password) or  # At least one uppercase letter
+            not re.search(r'[a-z]', password) or  # At least one lowercase letter
+            not re.search(r'[0-9]', password) or  # At least one digit
+            not re.search(r'[!@#$%^&*(),.?":{}|<>]', password)):  # At least one special character
+            
+            raise ValueError("Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one digit, and one special character.")
+        
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt(10))
+        return hashed_password.decode('utf-8')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'email': self.email,
+            'image': self.image,
+            'address': self.address,
+            'gender': self.gender,
+            'dob': self.dob,
+            'phone': self.phone
+        }
 
     def __repr__(self):
         return f'<User {self.name}>'
     
+class Appointment(db.Model, SerializerMixin):
+
+    __tablename__ = 'appointments'
+
+    serialize_rules = ( '-password')
+
+    id = db.Column(db.Integer, primary_key=True)
+    userId = db.Column(db.Integer, nullable=False)
+    docId = db.Column(db.Integer, nullable=False)
+    slotDate = db.Column(db.String, nullable=False)
+    slotTime = db.Column(db.String, nullable=False)
+    userData = db.Column(db.JSON, nullable=False)
+    docData = db.Column(db.JSON, nullable=False)
+    amount = db.Column(db.Numeric(10,2), nullable=False)
+    date = db.Column(db.Date, nullable=False, default=datetime.now().date)
+    cancelled = db.Column(db.Boolean, nullable=False, default=False)
+    payment = db.Column(db.Boolean, nullable=False, default=False)
+    isCompleted = db.Column(db.Boolean, nullable=False, default=False)
+
+    def __repr__(self):
+        return f'<User {self.id}>'
 
