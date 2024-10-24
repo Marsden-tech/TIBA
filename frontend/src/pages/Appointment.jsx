@@ -1,14 +1,18 @@
 import React, { useContext, useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { AppContext } from '../context/AppContext'
-import { assets } from '../assets/assets'
+import {assets} from '../assets/assets'
 import RelatedDoctors from '../components/RelatedDoctors'
+import { toast } from 'react-toastify'
+import axios from 'axios'
 
 const Appointment = () => {
 
-  const {docId} = useParams()
-  const {doctors, currencySymbol} = useContext(AppContext)
+  const { docId } = useParams()
+  const { doctors, currencySymbol, backendUrl, token, getDoctorsData } = useContext(AppContext)
   const daysOfWeek = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
+
+  const navigate = useNavigate()
 
   const [docInfo, setDocInfo] = useState(null)
   const [docSlots, setDocSlots] = useState([])
@@ -16,7 +20,7 @@ const Appointment = () => {
   const [slotTime, setSlotTime] = useState('')
 
   const fetchDocInfo = async () => {
-    const docInfo = doctors.find(doc => doc._id === docId)
+    const docInfo = doctors.find(doc => doc.id === Number(docId))
     setDocInfo(docInfo)
 
   }
@@ -27,29 +31,29 @@ const Appointment = () => {
     // getting current date
     let today = new Date()
 
-    for(let i=0 ; i<7; i++){
+    for (let i = 0; i < 7; i++) {
       //getting date with index
       let currentDate = new Date(today)
-      currentDate.setDate(today.getDate()+i)
+      currentDate.setDate(today.getDate() + i)
 
       //setting end time of the date with index
       let endTime = new Date()
-      endTime.setDate(today.getDate()+i)
-      endTime.setHours(21,0,0,0)
+      endTime.setDate(today.getDate() + i)
+      endTime.setHours(21, 0, 0, 0)
 
       //setting hours
       if (today.getDate() === currentDate.getDate()) {
-        currentDate.setHours(currentDate.getHours() > 10 ? currentDate.getHours() +1 : 10)
+        currentDate.setHours(currentDate.getHours() > 10 ? currentDate.getHours() + 1 : 10)
         currentDate.setMinutes(currentDate.getMinutes() > 30 ? 30 : 0)
-      }else {
+      } else {
         currentDate.setHours(10)
         currentDate.setMinutes(0)
       }
 
       let timeSlots = []
 
-      while(currentDate < endTime) {
-        let formattedTime = currentDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit'})
+      while (currentDate < endTime) {
+        let formattedTime = currentDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
         // add slot to array
         timeSlots.push({
@@ -66,17 +70,57 @@ const Appointment = () => {
     }
   }
 
-  useEffect(()=>{
-    fetchDocInfo()
-  },[doctors,docId])
+  const bookAppointment = async () => {
 
-  useEffect(()=>{
+    if (!token) {
+      toast.warn("Login to book Appointment")
+      return navigate('/login')
+    }
+
+    try {
+
+      const date = docSlots[slotIndex][0].datetime
+
+      let day = date.getDate()
+      let month = date.getMonth()+1
+      let year = date.getFullYear()
+
+      const slotDate = day +"_" + month + "_" + year
+
+      const {data} = await axios.post(backendUrl + '/book-appointment', {docId, slotDate, slotTime}, {headers:{"Authorization": token}})
+
+      if (data.success) {
+
+        toast.success(data.message)
+        getDoctorsData()
+        navigate('/my-appointments')
+        
+      } else {
+        toast.error(data.message)
+      }
+      
+      
+    } catch (error) {
+      
+      console.log(error);
+      toast.error(error.message)
+      
+
+    }
+
+  }
+
+  useEffect(() => {
+    fetchDocInfo()
+  }, [doctors, docId])
+
+  useEffect(() => {
     getAvailableSlots()
-  },[docInfo])
+  }, [docInfo])
 
   useEffect(() => {
     console.log(docSlots)
-  },[docSlots])
+  }, [docSlots])
 
   return docInfo && (
     <div>
@@ -104,7 +148,7 @@ const Appointment = () => {
             <p className='text-sm text-gray-500 max-w-[700px] mt-1'>{docInfo.about}</p>
           </div>
           <p className='text-gray-500 font-medium mt-4'>
-            Appointment fee: <span className='text-gray-600'>{currencySymbol}{docInfo.fees}</span>
+            Appointment fee: <span className='text-gray-600'>{currencySymbol} {docInfo.fees}</span>
           </p>
         </div>
       </div>
@@ -114,8 +158,8 @@ const Appointment = () => {
         <p>Booking slots</p>
         <div className='flex gap-3 items-center w-full overflow-x-scroll mt-4'>
           {
-            docSlots.length && docSlots.map((item,index)=>(
-              <div onClick={()=> setSlotIndex(index)} className={`text-center py-6 min-w-16 rounded-full cursor-pointer ${slotIndex === index ? 'bg-primary text-white' : 'border border-gray-200'}`} key={index}>
+            docSlots.length && docSlots.map((item, index) => (
+              <div onClick={() => setSlotIndex(index)} className={`text-center py-6 min-w-16 rounded-full cursor-pointer ${slotIndex === index ? 'bg-primary text-white' : 'border border-gray-200'}`} key={index}>
                 <p>{item[0] && daysOfWeek[item[0].datetime.getDay()]}</p>
                 <p>{item[0] && item[0].datetime.getDate()}</p>
               </div>
@@ -124,19 +168,19 @@ const Appointment = () => {
         </div>
 
         <div className='flex items-center gap-3 w-full overflow-x-scroll mt-4'>
-          {docSlots.length && docSlots[slotIndex].map((item,index)=>(
+          {docSlots.length && docSlots[slotIndex].map((item, index) => (
             <p onClick={() => setSlotTime(item.time)} className={`text-sm font-light flex-shrink-0 px-5 py-2 rounded-full cursor-pointer ${item.time === slotTime ? 'bg-primary text-white' : 'text-gray-400 border border-gray-300'}`} key={index}>
               {item.time.toLowerCase()}
             </p>
           ))}
         </div>
-        
-        <button className='bg-primary text-white text-sm font-light px-14 py-3 rounded-full my-6'>Book an appointment</button>
+
+        <button onClick={bookAppointment} className='bg-primary text-white text-sm font-light px-14 py-3 rounded-full my-6'>Book an appointment</button>
 
       </div>
-      
+
       {/* ----Related Doctors------ */}
-      <RelatedDoctors docId={docId} speciality={docInfo.speciality}/>
+      <RelatedDoctors docId={docId} speciality={docInfo.speciality} />
 
     </div>
   )
