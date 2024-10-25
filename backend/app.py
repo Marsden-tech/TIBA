@@ -53,7 +53,7 @@ def create_token(email,password):
     token = jwt.encode({
         'email': email,
         'password':password,
-        'exp': datetime.datetime.now() + datetime.timedelta(hours=1)
+        'exp': datetime.datetime.now() + datetime.timedelta(hours=24)
     }, SECRET_KEY, algorithm='HS256')
 
     if isinstance(token, bytes):
@@ -980,7 +980,7 @@ api.add_resource(MpesaCallback, '/mpesa-callback')
 #Admin appointment list
 class AppointmentsAdmin(Resource):
     @token_required
-    def get():
+    def get(self):
         try:
             appointments = Appointment.query.all()
             
@@ -1002,6 +1002,103 @@ class AppointmentsAdmin(Resource):
             return make_response(response, 200)
         
 api.add_resource(AppointmentsAdmin, '/admin-appointments')
+
+#Admin cancel appointment
+class AdminCancelAppointment(Resource):
+    @token_required
+    def post(self):
+        try:
+            # Get data from request
+            data = request.get_json()
+            appointmentId = data.get('appointmentId')
+            
+            if not appointmentId:
+                return make_response(jsonify({
+                    "success": False,
+                    "message": "Appointment ID is required"
+                }), 400)
+            
+            # Find the appointment
+            appointment = Appointment.query.get(appointmentId)
+            
+            if not appointment:
+                return make_response(jsonify({
+                    "success": False,
+                    "message": "Appointment not found"
+                }), 200)
+            
+            if appointment.payment:
+                return make_response(jsonify({
+                    "success": False,
+                    "message": "Can't cancel a paid appointment"
+                }), 200)
+            
+            # Cancel the appointment
+            appointment.cancelled = True
+            
+            # If you're also managing doctor's slots, remove the slot from booked slots
+            try:
+                doctor = Doctor.query.get(appointment.docId)
+                if doctor and doctor.slots_booked:
+                    slots_booked = doctor.slots_booked
+                    if appointment.slotDate in slots_booked:
+                        slots_booked[appointment.slotDate] = [
+                            slot for slot in slots_booked[appointment.slotDate] 
+                            if slot != appointment.slotTime
+                        ]
+                        flag_modified(doctor, 'slots_booked')
+            except Exception as e:
+                print(f"Error updating doctor slots: {str(e)}")
+            # Save changes
+            db.session.commit()
+            
+            return make_response(jsonify({
+                "success": True,
+                "message": "Appointment cancelled successfully"
+            }), 200)
+            
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error cancelling appointment: {str(e)}")
+            return make_response(jsonify({
+                "success": False,
+                "message": "Error cancelling appointment"
+            }), 500)
+        
+api.add_resource(AdminCancelAppointment, '/admin/cancel-appointment')
+
+#API to get dashboard data for admin panel
+class AdminDashboard(Resource):
+    @token_required
+    def get(self):
+        try:
+            
+            doctors = Doctor.query.all()
+            users = User.query.all()
+            appointments = Appointment.query.all()
+
+            appointment_list = [appointment.to_dict() for appointment in appointments]
+
+
+            dashData = {
+                'doctors':len(doctors),
+                'appointments':len(appointments),
+                'patients':len(users),
+                'latestAppointments':appointment_list[-5:]
+
+            }
+
+            response = jsonify({"success":True, "dashData":dashData})
+            return make_response(response, 200)
+
+        except Exception as e:
+            print(f"Error getting data: {str(e)}")
+            return make_response(jsonify({
+                "success": False,
+                "message": "Error getting data"
+            }), 500)
+
+api.add_resource(AdminDashboard, '/admin-dashboard')          
         
 
 if __name__ == '__main__':
