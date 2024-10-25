@@ -83,7 +83,7 @@ class User(db.Model, SerializerMixin):
     address = db.Column(db.JSON, default={'line1':'', 'line2':''})
     gender = db.Column(db.String, default='Not Selected')
     dob = db.Column(db.String, default='Not Selected')
-    phone = db.Column(db.String, default='0000000000')
+    phone = db.Column(db.String, default='254')
 
     @validates('email')
     def validate_email(self, key, email):
@@ -126,7 +126,7 @@ class Appointment(db.Model, SerializerMixin):
 
     __tablename__ = 'appointments'
 
-    serialize_rules = ( '-password')
+    serialize_rules = ( '-checkout_request_id', '-transaction_id', '-payment_details')
 
     id = db.Column(db.Integer, primary_key=True)
     userId = db.Column(db.Integer, nullable=False)
@@ -136,10 +136,15 @@ class Appointment(db.Model, SerializerMixin):
     userData = db.Column(db.JSON, nullable=False)
     docData = db.Column(db.JSON, nullable=False)
     amount = db.Column(db.Numeric(10,2), nullable=False)
-    date = db.Column(db.Date, nullable=False, default=datetime.now().date)
+    date = db.Column(db.String, nullable=False, default=datetime.now().date())
     cancelled = db.Column(db.Boolean, nullable=False, default=False)
     payment = db.Column(db.Boolean, nullable=False, default=False)
     isCompleted = db.Column(db.Boolean, nullable=False, default=False)
+
+    #Mpesa integration fields
+    checkout_request_id = db.Column(db.String, nullable=True)
+    transaction_id = db.Column(db.String, nullable=True)
+    payment_details = db.Column(db.JSON, nullable=True)
 
     def __repr__(self):
         return f'<User {self.id}>'

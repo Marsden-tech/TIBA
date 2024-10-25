@@ -10,11 +10,13 @@ import cloudinary.uploader
 import os
 import jwt
 import datetime
-import ast
+import pytz
 from dotenv import load_dotenv
 from functools import wraps
-import re
+import base64
 import bcrypt
+import requests
+import logging
 from sqlalchemy.orm.attributes import flag_modified
 
 from models import db, Doctor, Doc_address, User, Appointment
@@ -44,6 +46,7 @@ login_manager.init_app(app)
 CORS(app)
 api = Api(app)
 
+
 # Token creation function
 def create_token(email,password):
     
@@ -64,15 +67,15 @@ def token_required(f):
     def decorated(*args, **kwargs):
         token = request.headers.get('Authorization')  # Get token from the Authorization header
         if not token:
-            return make_response(jsonify({"error": "Token is missing!"}), 401)
+            return make_response(jsonify({"success":False, "error": "Token is missing!"}), 200)
         
         try:
             # Decode the token to verify it's valid
             jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
         except jwt.ExpiredSignatureError:
-            return make_response(jsonify({"error": "Token has expired!"}), 401)
+            return make_response(jsonify({"success":False, "error": "Token has expired!"}), 200)
         except jwt.InvalidTokenError:
-            return make_response(jsonify({"error": "Invalid token!"}), 401)
+            return make_response(jsonify({"success":False, "error": "Invalid token!"}), 200)
         
         # If everything is okay, call the wrapped function and return its response
         return f(*args, **kwargs)
@@ -510,7 +513,7 @@ class BookAppointment(Resource):
             serializedDocData = docData.to_dict()
 
 
-            if docData.available == False:
+            if not docData.available:
                 response = jsonify({"success":False, "message":"Doctor not available"})
                 return make_response(response, 200)
 
@@ -553,7 +556,7 @@ class BookAppointment(Resource):
             
             response = jsonify({
                 "success": True, 
-                "message": "Slot booked successfully"
+                "message": "Appointment booked successfully"
             })
             return make_response(response, 200)
 
@@ -568,6 +571,98 @@ class BookAppointment(Resource):
             return make_response(response, 500)
 
 api.add_resource(BookAppointment, '/book-appointment')
+
+#API to get user appointments data
+class UserAppointment(Resource):
+
+    @user_token_required
+    def get(self, user_id):
+        try:
+            appointments = Appointment.query.filter_by(userId=user_id).all()
+            serialized_appointments = [appointment.to_dict() for appointment in appointments]
+        
+            response = jsonify({"success":True, "appointments": serialized_appointments})
+
+            return make_response(response, 200)
+
+        except Exception as e:
+            print(f"Error getting appointment: {str(e)}")  # For debugging
+            response = jsonify({
+                "success": False, 
+                "message": f"An error occurred: {str(e)}"
+            })
+            return make_response(response, 500)
+
+api.add_resource(UserAppointment, '/user/list-appointments')
+
+#API to cancel appointment
+class CancelAppointment(Resource):
+    @user_token_required
+    def post(self, user_id):
+        try:
+            # Get data from request
+            data = request.get_json()
+            appointmentId = data.get('appointmentId')
+            
+            if not appointmentId:
+                return make_response(jsonify({
+                    "success": False,
+                    "message": "Appointment ID is required"
+                }), 400)
+            
+            # Find the appointment
+            appointment = Appointment.query.get(appointmentId)
+            
+            if not appointment:
+                return make_response(jsonify({
+                    "success": False,
+                    "message": "Appointment not found"
+                }), 404)
+            
+            # Check if user owns this appointment
+            if appointment.userId != user_id:
+                return make_response(jsonify({
+                    "success": False,
+                    "message": "Unauthorized to cancel this appointment"
+                }), 403)
+            
+            # Cancel the appointment
+            appointment.cancelled = True
+            
+            # If you're also managing doctor's slots, remove the slot from booked slots
+            try:
+                doctor = Doctor.query.get(appointment.docId)
+                if doctor and doctor.slots_booked:
+                    slots_booked = doctor.slots_booked
+                    if appointment.slotDate in slots_booked:
+                        slots_booked[appointment.slotDate] = [
+                            slot for slot in slots_booked[appointment.slotDate] 
+                            if slot != appointment.slotTime
+                        ]
+                        flag_modified(doctor, 'slots_booked')
+            except Exception as e:
+                print(f"Error updating doctor slots: {str(e)}")
+            print(doctor.slots_booked)
+            # Save changes
+            db.session.commit()
+            print(doctor.slots_booked)
+            
+            return make_response(jsonify({
+                "success": True,
+                "message": "Appointment cancelled successfully"
+            }), 200)
+            
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error cancelling appointment: {str(e)}")
+            return make_response(jsonify({
+                "success": False,
+                "message": "Error cancelling appointment"
+            }), 500)
+
+# Register the resource
+api.add_resource(CancelAppointment, '/cancel-appointment')
+
 
 # Login Resource
 class AdminLogin(Resource):
@@ -597,6 +692,317 @@ class AdminLogin(Resource):
 
 # Add the Login resource to the API
 api.add_resource(AdminLogin, '/admin/login')
+
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+class MpesaAPI:
+    def __init__(self):
+        # Core MPESA credentials
+        self.business_shortcode = os.getenv('MPESA_BUSINESS_SHORTCODE')
+        self.consumer_key = os.getenv('MPESA_CONSUMER_KEY')
+        self.consumer_secret = os.getenv('MPESA_CONSUMER_SECRET')
+        self.passkey = os.getenv('MPESA_PASSKEY')
+
+        # API endpoints
+        self.auth_url = "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials"
+        self.stk_push_url = "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest"
+        
+        # Validate configuration
+        self._validate_config()
+        
+        logger.info("MPESA API initialized successfully")
+
+    def _validate_config(self):
+        """Validate all required configuration is present"""
+        required_configs = [
+            'MPESA_BUSINESS_SHORTCODE',
+            'MPESA_CONSUMER_KEY',
+            'MPESA_CONSUMER_SECRET',
+            'MPESA_PASSKEY',
+        ]
+        
+        missing_configs = [config for config in required_configs 
+                         if not os.getenv(config)]
+        
+        if missing_configs:
+            raise ValueError(f"Missing required configurations: {', '.join(missing_configs)}")
+
+    def get_access_token(self):
+        """Get OAuth access token from Safaricom"""
+        try:
+            auth_string = base64.b64encode(
+                f"{self.consumer_key}:{self.consumer_secret}".encode()
+            ).decode()
+            
+            headers = {"Authorization": f"Basic {auth_string}"}
+            
+            response = requests.get(self.auth_url, headers=headers, timeout=30)
+            response.raise_for_status()
+            
+            token_data = response.json()
+            logger.debug("Successfully retrieved access token")
+            
+            return token_data["access_token"]
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to get access token: {str(e)}")
+            raise Exception("Failed to get access token from Safaricom")
+
+    def generate_password(self):
+        """Generate password for STK push"""
+        timestamp = datetime.datetime.now(pytz.timezone('Africa/Nairobi')).strftime('%Y%m%d%H%M%S')
+        password_str = f"{self.business_shortcode}{self.passkey}{timestamp}"
+        return base64.b64encode(password_str.encode()).decode(), timestamp
+
+    def initiate_stk_push(self, phone_number, amount, reference):
+        """
+        Initiate STK push payment
+        
+        Args:
+            phone_number (str): Customer phone number
+            amount (float): Amount to charge
+            reference (str): Unique reference for the transaction
+            
+        Returns:
+            dict: Response from MPESA API
+        """
+        try:
+            # Format phone number
+            if phone_number.startswith('+'):
+                phone_number = phone_number[1:]
+            if phone_number.startswith('0'):
+                phone_number = '254' + phone_number[1:]
+                
+            # Get credentials
+            access_token = self.get_access_token()
+            password, timestamp = self.generate_password()
+            
+            
+            # Prepare request
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "BusinessShortCode": self.business_shortcode,
+                "Password": password,
+                "Timestamp": timestamp,
+                "TransactionType": "CustomerPayBillOnline",
+                "Amount": int(float(amount)),  # Convert Numeric to int
+                "PartyA": phone_number,
+                "PartyB": self.business_shortcode,
+                "PhoneNumber": phone_number,
+                "CallBackURL": "https://6d66-154-159-238-160.ngrok-free.app/mpesa-callback",
+                "AccountReference": reference,
+                "TransactionDesc": f"Payment for Appointment {reference}"
+            }
+            
+            logger.debug(f"Initiating STK push with {payload}")
+            
+            # Make request
+            response = requests.post(
+                self.stk_push_url,
+                json=payload,
+                headers=headers,
+                timeout=30
+            )
+            response.raise_for_status()
+            
+            result = response.json()
+            logger.info(f"STK push initiated successfully: {result}")
+            
+            return result
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to initiate STK push: {str(e)}")
+            raise Exception("Failed to initiate payment with Safaricom")
+        except Exception as e:
+            logger.error(f"Unexpected error during STK push: {str(e)}")
+            raise
+
+class InitiatePayment(Resource):
+    @user_token_required
+    def post(self, user_id):
+        """
+        Initiate a new MPESA payment
+        
+        Expected payload:
+        {
+            "phone": "254712345678",
+            "appointment_id": "123"
+        }
+        """
+        try:
+            data = request.get_json()
+            
+            # Validate required fields
+            required_fields = ['phone', 'appointment_id']
+            missing_fields = [field for field in required_fields 
+                            if field not in data]
+            
+            if missing_fields:
+                return {
+                    "success": False,
+                    "message": f"Missing required fields: {', '.join(missing_fields)}"
+                }, 400
+            
+            # Get appointment and validate
+            appointment = Appointment.query.get(data['appointment_id'])
+            if not appointment:
+                return {
+                    "success": False,
+                    "message": "Appointment not found"
+                }, 404
+                
+            if appointment.payment:
+                return {
+                    "success": False,
+                    "message": "Appointment has already been paid"
+                }, 400
+                
+            if appointment.cancelled:
+                return {
+                    "success": False,
+                    "message": "Cannot pay for cancelled appointment"
+                }, 400
+            
+            if appointment.checkout_request_id:
+                old_id = appointment.checkout_request_id
+                appointment.checkout_request_id = None
+                db.session.commit()
+            
+            # Initialize payment
+            mpesa = MpesaAPI()
+            result = mpesa.initiate_stk_push(
+                phone_number=data['phone'],
+                amount=float(appointment.amount),  # Use amount from appointment
+                reference=str(appointment.id)
+            )
+            
+            # Store checkout request ID
+            appointment.checkout_request_id = result.get('CheckoutRequestID')
+            db.session.commit()
+            
+            return {
+                "success": True,
+                "message": "Payment initiated successfully",
+                "data": result
+            }, 200
+            
+        except Exception as e:
+            logger.error(f"Payment initiation error: {str(e)}")
+            db.session.rollback()
+            response = jsonify({
+                "success": False,
+                "message": "Enter a valid Safaricom phone number."
+            })
+            return make_response(response, 200)
+
+class MpesaCallback(Resource):
+    def post(self):
+        """Handle MPESA payment callbacks"""
+        try:
+            callback_data = request.get_json()
+            logger.info(f"Received MPESA callback: {callback_data}")
+            
+            # Extract callback data
+            body = callback_data.get('Body', {}).get('stkCallback', {})
+            checkout_request_id = body.get('CheckoutRequestID')
+            result_code = body.get('ResultCode')
+            
+            if not checkout_request_id:
+                logger.error("Missing CheckoutRequestID in callback")
+                return {"success": False, "message": "Invalid callback data"}, 400
+            
+            # Find appointment
+            appointment = Appointment.query.filter_by(
+                checkout_request_id=checkout_request_id
+            ).first()
+            
+            if not appointment:
+                logger.error(f"No appointment found for checkout ID: {checkout_request_id}")
+                return {"success": False, "message": "Appointment not found"}, 404
+
+            # Process payment result
+            if result_code == 0:  # Success
+                # Extract payment details
+                items = body.get('CallbackMetadata', {}).get('Item', [])
+                receipt_number = next(
+                    (item['Value'] for item in items if item['Name'] == 'MpesaReceiptNumber'),
+                    None
+                )
+                
+                # Update appointment
+                appointment.payment = True
+                appointment.transaction_id = receipt_number
+                appointment.payment_details = callback_data
+                appointment.checkout_request_id = None  # Clear for retry if needed
+                
+                logger.info(f"Payment successful for appointment {appointment.id}")
+                
+            else:  # Failed
+                # Update appointment for retry
+                appointment.payment = False
+                appointment.payment_details = callback_data
+                appointment.checkout_request_id = None  # Clear for retry
+
+                response = jsonify({"success":False, "message":"Payment Unsuccessfull"})
+                logger.warning(f"Payment failed for appointment {appointment.id}")
+
+                return make_response(response, 200)
+            
+            db.session.commit()
+            
+            response = jsonify( {
+                "success": True,
+                "message": "Callback processed successfully"
+            }),
+            return make_response(response, 200)
+            
+        except Exception as e:
+            logger.error(f"Callback processing error: {str(e)}")
+            db.session.rollback()
+            return {
+                "success": False,
+                "message": f"Callback processing failed: {str(e)}"
+            }, 500
+
+# Add routes
+api.add_resource(InitiatePayment, '/initiate-payment')
+api.add_resource(MpesaCallback, '/mpesa-callback')
+
+
+#ADMIN API ENDPOINTS
+
+#Admin appointment list
+class AppointmentsAdmin(Resource):
+    @token_required
+    def get():
+        try:
+            appointments = Appointment.query.all()
+            
+            appointment_list = [appointment.to_dict() for appointment in appointments]
+
+            response = jsonify({
+                "success": True,
+                "appointments": appointment_list
+            })
+            return make_response(response, 200)
+
+        except Exception as e:
+            
+            response = jsonify({
+                "success": False,
+                "message": f"{str(e)}"
+            })
+
+            return make_response(response, 200)
+        
+api.add_resource(AppointmentsAdmin, '/admin-appointments')
+        
 
 if __name__ == '__main__':
     app.run(port=5555, debug=True)

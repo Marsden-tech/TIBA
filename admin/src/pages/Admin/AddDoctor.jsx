@@ -43,7 +43,7 @@ const AddDoctor = () => {
             formData.append('address', JSON.stringify({ line1: address1, line2: address2 }))
 
 
-            const { data } = await axios.post(backendUrl + '/doctors', formData, { headers: { 'Authorization' : aToken, 'Content-Type':'multipart/form-data' } });
+            const { data } = await axios.post(backendUrl + '/admin-add-doctor', formData, { headers: { 'Authorization' : aToken, 'Content-Type':'multipart/form-data' } });
             
             if (data.success) {
                 toast.success(data.message);
