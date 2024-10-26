@@ -1045,7 +1045,7 @@ class MpesaCallback(Resource):
                 "message": f"Callback processing failed: {str(e)}"
             }, 500
 
-# Add routes
+# Adding resource
 api.add_resource(InitiatePayment, '/initiate-payment')
 api.add_resource(MpesaCallback, '/mpesa-callback')
 
