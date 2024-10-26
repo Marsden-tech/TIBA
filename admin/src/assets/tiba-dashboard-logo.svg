@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 120">
+  <!-- Definitions -->
+  <defs>
+    <linearGradient id="mainGradient2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2563eb"/>
+      <stop offset="100%" style="stop-color:#1d4ed8"/>
+    </linearGradient>
+    <linearGradient id="accentGradient2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#60a5fa"/>
+      <stop offset="100%" style="stop-color:#3b82f6"/>
+    </linearGradient>
+    <filter id="glow2" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Medical Cross -->
+  <g transform="translate(40, 30)">
+    <rect x="0" y="0" width="60" height="60" rx="8" 
+          fill="url(#mainGradient2)" filter="url(#glow2)"/>
+    <rect x="14" y="-14" width="32" height="88" rx="8" 
+          fill="url(#mainGradient2)"/>
+  </g>
+
+  <!-- TIBA Text -->
+  <text x="140" y="80" 
+        font-family="Arial, sans-serif" 
+        font-weight="bold" 
+        font-size="76" 
+        fill="url(#mainGradient2)" 
+        letter-spacing="4">
+    TIBA
+  </text>
+
+  <!-- Dashboard Panel Text -->
+  <text x="144" y="115" 
+        font-family="Arial, sans-serif" 
+        font-size="28" 
+        font-weight="500"
+        fill="#64748b">
+    Dashboard Panel
+  </text>
+
+  <!-- Heartbeat Line -->
+  <path d="M360 80 L380 80 L390 50 L400 110 L410 80 L430 80" 
+        stroke="url(#accentGradient2)" 
+        stroke-width="6" 
+        stroke-linecap="round" 
+        fill="none"/>
+
+  <!-- Stethoscope -->
+  <g transform="translate(480, 50)">
+    <circle cx="0" cy="0" r="16" 
+            fill="none" 
+            stroke="url(#mainGradient2)" 
+            stroke-width="5"/>
+    <path d="M0 16 C0 40 -20 50 -20 70" 
+          stroke="url(#mainGradient2)" 
+          stroke-width="5" 
+          fill="none" 
+          stroke-linecap="round"/>
+    <circle cx="0" cy="0" r="6" 
+            fill="url(#mainGradient2)"/>
+  </g>
+</svg>

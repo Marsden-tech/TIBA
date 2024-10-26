@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!-- Main circle representing medical/health -->
+  <circle cx="100" cy="100" r="90" fill="#4A90E2" opacity="0.1"/>
+  
+  <!-- Cross symbol -->
+  <path d="M85 60 L115 60 L115 85 L140 85 L140 115 L115 115 L115 140 L85 140 L85 115 L60 115 L60 85 L85 85 Z" 
+        fill="#4A90E2"/>
+  
+  <!-- Calendar dots representing appointment system -->
+  <circle cx="75" cy="100" r="4" fill="#4A90E2"/>
+  <circle cx="100" cy="100" r="4" fill="#4A90E2"/>
+  <circle cx="125" cy="100" r="4" fill="#4A90E2"/>
+  
+  <!-- Text -->
+  <text x="100" y="180" 
+        font-family="Arial, sans-serif" 
+        font-size="24" 
+        font-weight="bold" 
+        text-anchor="middle" 
+        fill="#4A90E2">
+    TIBA
+  </text>
+</svg>

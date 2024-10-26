@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80">
+  <!-- Gradient Definitions -->
+  <defs>
+    <linearGradient id="textGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2563eb" />
+      <stop offset="100%" style="stop-color:#1d4ed8" />
+    </linearGradient>
+    <linearGradient id="pulseGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#60a5fa" />
+      <stop offset="100%" style="stop-color:#3b82f6" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background Medical Symbol with Glow -->
+  <g transform="translate(20, 15)">
+    <!-- Glow effect -->
+    <rect x="0" y="0" width="30" height="30" rx="4" 
+          fill="#60a5fa" 
+          filter="url(#glow)" 
+          opacity="0.2"/>
+    
+    <!-- Cross -->
+    <rect x="0" y="0" width="30" height="30" rx="4" 
+          fill="url(#textGradient)"/>
+    <rect x="7" y="-7" width="16" height="44" rx="4" 
+          fill="url(#textGradient)"/>
+  </g>
+
+  <!-- Main Text "TIBA" -->
+  <text x="70" y="43" 
+        font-family="Arial, sans-serif" 
+        font-weight="bold" 
+        font-size="38" 
+        fill="url(#textGradient)" 
+        letter-spacing="2">
+    TIBA
+  </text>
+
+  <!-- Tagline -->
+  <text x="72" y="60" 
+        font-family="Arial, sans-serif" 
+        font-size="12" 
+        fill="#64748b">
+    Healthcare Made Simple
+  </text>
+
+  <!-- Animated Pulse Line -->
+  <path d="M180 40 L190 40 L195 25 L200 55 L205 40 L215 40" 
+        stroke="url(#pulseGradient)" 
+        stroke-width="3" 
+        stroke-linecap="round" 
+        fill="none">
+  </path>
+
+  <!-- Modern Stethoscope Icon -->
+  <g transform="translate(240, 25)">
+    <!-- Head of stethoscope -->
+    <circle cx="0" cy="0" r="8" 
+            fill="none" 
+            stroke="url(#textGradient)" 
+            stroke-width="2.5"/>
+    
+    <!-- Tube -->
+    <path d="M0 8 C0 20 -10 25 -10 35" 
+          stroke="url(#textGradient)" 
+          stroke-width="2.5" 
+          fill="none" 
+          stroke-linecap="round"/>
+    
+    <!-- Center piece -->
+    <circle cx="0" cy="0" r="3" 
+            fill="url(#textGradient)"/>
+  </g>
+
+  <!-- Add subtle glow filter -->
+  <defs>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+</svg>

@@ -19,8 +19,10 @@ const Navbar = () => {
 
   return (
     <div className='flex items-center justify-between text-sm py-4 mb-5 border-b border-b-gray-400'>
-        <img onClick={()=>navigate('/')} className='w-38 h-20 cursor-pointer' src={assets.fhlogo} alt='' />
-        <p className='font-medium text-xl'>FastHealth Solutions</p>
+        <div className='flex items-center'>
+        <img onClick={()=>navigate('/')} className='w-39 h-16 cursor-pointer' src={assets.tiba_logo} alt='' />
+        <p className='font-bold text-xl ml-2 text-primary'>TIBA Appointment Solutions</p>
+        </div>
         <ul className='hidden md:flex items-start gap-5 font-medium'>
             <NavLink to='/'>
                 <li className='py-1'>HOME</li>
@@ -60,7 +62,7 @@ const Navbar = () => {
             {/*----Mobile Menu----- */}
             <div className={`${showMenu ? 'fixed w-full' : 'h-0 w-0'} md:hidden right-0 top-0 bottom-0 z-20 overflow-hidden bg-white transition-all`}>
                 <div className='flex items-center justify-between px-5 py-6'>
-                    <img className='w-38 h-20' src={assets.fhlogo} alt="" />
+                    <img className='w-39 h-16' src={assets.tiba_logo} alt="" />
                     <img className='w-7' onClick={()=>setShowMenu(false)} src={assets.cross_icon} alt="" />
                 </div>
                 <ul className='flex flex-col items-center gap-2 mt-5 px-5 text-lg font-medium'>

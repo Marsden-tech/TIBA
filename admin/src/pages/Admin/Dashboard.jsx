@@ -78,18 +78,24 @@ const Dashboard = () => {
                   <p className='text-gray-800 font-medium'>{item.docData.name}</p>
                   <p className='text-gray-600'>{slotDateFormat(item.slotDate)}</p>
                 </div>
-                {item.payment ? (
-                  <p className='text-green-400 text-xs font-medium'>Paid</p>
-                ) : item.cancelled ? (
-                  <p className='text-red-400 text-xs font-medium'>Cancelled</p>
-                ) : (
-                  <img
-                    onClick={() => handleCancelAppointment(item.id)}
-                    className='w-10 cursor-pointer'
-                    src={assets.cancel_icon}
-                    alt="Cancel"
-                  />
-                )}
+                {item.isCompleted
+                  ? <p className='text-green-500 text-xs font-medium'>Completed</p>
+                  : item.payment
+                    ? (
+                      <p className='text-green-500 text-xs font-medium'>Paid</p>
+                    )
+                    : item.cancelled
+                      ? (
+                        <p className='text-red-400 text-xs font-medium'>Cancelled</p>
+                      )
+                      : (
+                        <img
+                          onClick={() => cancelAppointment(item.id)}
+                          className='w-10 cursor-pointer'
+                          src={assets.cancel_icon}
+                          alt="Cancel"
+                        />
+                      )}
               </div>
             ))
           }

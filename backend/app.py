@@ -107,6 +107,31 @@ def user_token_required(f):
         return f(*args, **kwargs)
     return decorated
 
+def doctor_token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get('Authorization')  # Get token from the Authorization header
+        if not token:
+            return make_response(jsonify({"error": "Token is missing!"}), 401)
+        
+        try:
+            # Decode the token to verify it's valid
+            if token.startswith('Bearer '):
+                token = token.split(' ')[1]
+
+            payload = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+            kwargs['doc_id'] = payload.get('doctor_id')
+
+
+        except jwt.ExpiredSignatureError:
+            return make_response(jsonify({"error": "Token has expired!"}), 401)
+        except jwt.InvalidTokenError:
+            return make_response(jsonify({"error": "Invalid token!"}), 401)
+        
+        # If everything is okay, call the wrapped function and return its response
+        return f(*args, **kwargs)
+    return decorated
+
 
 
     
@@ -664,7 +689,7 @@ class CancelAppointment(Resource):
 api.add_resource(CancelAppointment, '/cancel-appointment')
 
 
-# Login Resource
+# Admin Login Resource
 class AdminLogin(Resource):
     
     def post(self):
@@ -693,6 +718,56 @@ class AdminLogin(Resource):
 # Add the Login resource to the API
 api.add_resource(AdminLogin, '/admin/login')
 
+# Doctor Login Resource
+class DoctorLogin(Resource):
+    def post(self):
+        try:
+            data = request.get_json()  # Get JSON request data
+            email = data.get('email')
+            password = data.get('password')
+
+            # Validate email and password existence
+            if not email or not password:
+                return make_response(jsonify({
+                    "success": False,
+                    "message": "Email and password required"
+                }), 200)
+            
+            doctor = Doctor.query.filter_by(email=email).first()
+
+            if not doctor:
+                return make_response(jsonify({
+                    "success": False,
+                    "message": "Doctor does not exist"
+                }), 200)
+            
+            # Verify password using bcrypt
+            if bcrypt.checkpw(password.encode('utf-8'), doctor.password.encode('utf-8')):
+                token = jwt.encode({
+                    'doctor_id': doctor.id,
+                    'email': doctor.email,
+                    'exp': datetime.datetime.now() + datetime.timedelta(hours=24)
+                }, SECRET_KEY, algorithm='HS256')
+
+                if isinstance(token, bytes):
+                    token = token.decode('utf-8')
+
+                return make_response(jsonify({
+                    "success": True,
+                    "token": token,
+                }), 200)
+            
+            else:
+                return make_response(jsonify({
+                    "success": False,
+                    "message": "Invalid email or password"
+                }), 200)
+
+        except Exception as e:
+            return make_response(jsonify({"success": False,"error": f"An error occurred: {str(e)}"}), 400)
+
+
+api.add_resource(DoctorLogin, '/doctor/login')
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -1067,6 +1142,126 @@ class AdminCancelAppointment(Resource):
         
 api.add_resource(AdminCancelAppointment, '/admin/cancel-appointment')
 
+#API to get doctor appointments for doctor panel
+class AppointmentsDoctor(Resource):
+    @doctor_token_required
+    def get(self, doc_id):
+        try:
+            print(doc_id)
+            appointments = Appointment.query.filter_by(docId = doc_id).all()
+            serialized_appointments = [appointment.to_dict() for appointment in appointments]
+            
+            response = jsonify({"success":True, "appointments":serialized_appointments})
+
+            return make_response(response, 200)
+
+        except Exception as e:
+            print(f"Error cancelling appointment: {str(e)}")
+            return make_response(jsonify({
+                "success": False,
+                "message": "Error fetching appointments"
+            }), 500)
+        
+api.add_resource(AppointmentsDoctor, '/doctor-panel/appointments')
+
+#Api to mark appointment complete
+class AppointmentComplete(Resource):
+    @doctor_token_required
+    def post(self, doc_id):
+        try:
+            data = request.get_json()
+            appointmentId = data.get('appointmentId')
+
+            appointmentData = Appointment.query.get(appointmentId)
+
+            if appointmentData and appointmentData.docId == doc_id and appointmentData.payment:
+                appointmentData.isCompleted = True
+                db.session.add(appointmentData)
+                db.session.commit()
+
+                response = jsonify({"success":True, "message":"Appointment completed"})
+                return make_response(response, 200)
+            else:
+                response = jsonify({"success":False, "message":"Payment Pending"})
+                return make_response(response, 200)
+ 
+
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error cancelling appointment: {str(e)}")
+            return make_response(jsonify({
+                "success": False,
+                "message": "Error marking appointment complete"
+            }), 500)
+        
+api.add_resource(AppointmentComplete,'/doctor/complete-appointment')
+
+class DoctorAppointmentCancel(Resource):
+    @doctor_token_required
+    def post(self, doc_id):
+        try:
+            data = request.get_json()
+            appointmentId = data.get('appointmentId')
+
+            appointmentData = Appointment.query.get(appointmentId)
+
+            if appointmentData and appointmentData.docId == doc_id:
+                if appointmentData.payment:
+                    response = jsonify({"success":False, "message":"Appointment has been paid for"})
+                    return make_response(response, 200)
+                appointmentData.cancelled = True
+                db.session.add(appointmentData)
+                db.session.commit()
+
+                response = jsonify({"success":True, "message":"Appointment cancelled"})
+                return make_response(response, 200)
+            else:
+                response = jsonify({"success":False, "message":"Cancel Failed"})
+ 
+
+        except Exception as e:
+            print(f"Error cancelling appointment: {str(e)}")
+            return make_response(jsonify({
+                "success": False,
+                "message": "Error cancelling appointment"
+            }), 500)
+        
+api.add_resource(DoctorAppointmentCancel,'/doctor/cancel-appointment')
+
+#API to get dash data for doctor panel
+class DoctorDashboard(Resource):
+    @doctor_token_required
+    def get(self, doc_id):
+        try:
+            appointments = Appointment.query.filter_by(docId = doc_id).all()
+
+            earnings = sum(float(appointment.amount) 
+                  for appointment in appointments 
+                  if appointment.payment)
+            
+            patients = len(set(appointment.userId for appointment in appointments))
+
+            appointment_list = [appointment.to_dict() for appointment in appointments]
+
+            dashData = {
+                "earnings":earnings,
+                "appointments": len(appointments),
+                "patients": patients,
+                "latestAppointments": appointment_list[-5:]
+            }
+
+            response = jsonify({"success":True, "dashData":dashData})
+            return make_response(response, 200)
+
+        except Exception as e:
+            print(f"Error getting doc appointment: {str(e)}")
+            return make_response(jsonify({
+                "success": False,
+                "message": "Error getting doc appointment data"
+            }), 500)
+        
+api.add_resource(DoctorDashboard, '/doctor-dashboard')
+
 #API to get dashboard data for admin panel
 class AdminDashboard(Resource):
     @token_required
@@ -1098,7 +1293,81 @@ class AdminDashboard(Resource):
                 "message": "Error getting data"
             }), 500)
 
-api.add_resource(AdminDashboard, '/admin-dashboard')          
+api.add_resource(AdminDashboard, '/admin-dashboard')
+
+#API to get doctor profile
+class DoctorProfile(Resource):
+    @doctor_token_required
+    def get(self, doc_id):
+        try:
+            profileData = Doctor.query.get(doc_id)
+            profile_dict = profileData.to_dict()
+
+            response = jsonify({"success":True, "profileData":profile_dict})
+            return make_response(response, 200)
+
+        except Exception as e:
+            print(f"Error getting data: {str(e)}")
+            return make_response(jsonify({
+                "success": False,
+                "message": "Error getting data"
+            }), 500)
+        
+api.add_resource(DoctorProfile, '/doctor-profile')
+
+#API to update doctor profile data from doctor model
+
+def update_address(address, new_data):
+    if not address:
+        return False
+        
+    for field in ['line1', 'line2']:
+        if field in new_data:
+            if field == 'line1' and not new_data[field]:  # Skip empty line1
+                continue
+            setattr(address, field, new_data[field])
+    
+    try:
+        db.session.commit()
+        return True
+    except Exception as e:
+        db.session.rollback()
+        return False
+
+
+class UpdateDoctorProfile(Resource):
+    @doctor_token_required
+    def post(self, doc_id):
+        try:
+            data = request.get_json()
+            fees = data.get('fees')
+            available = data.get('available')
+            docId = doc_id
+
+            address = data.get('address')
+
+            doctor = Doctor.query.get(docId)
+            address_details = Doc_address.query.get(doctor.address_id)
+
+            update_address(address_details, address )
+
+            doctor.available = available
+            doctor.fees = fees
+            
+            db.session.add(doctor)
+            db.session.commit()
+
+            response = jsonify({"success":True, "message":"Profile Updated"})
+            return make_response(response, 200)
+
+        except Exception as e:
+            print(f"Error updating profile data: {str(e)}")
+            return make_response(jsonify({
+                "success": False,
+                "message": "Error getting profile data"
+            }), 500)
+        
+api.add_resource(UpdateDoctorProfile, '/doctor/update-profile')
         
 
 if __name__ == '__main__':
