@@ -1,0 +1,15 @@
+Flask==3.0.3
+gunicorn==21.2.0
+bcrypt
+flask_sqlalchemy
+sqlalchemy_serializer
+flask_login
+flask_migrate
+flask_cors
+flask_restful
+sqlalchemy
+cloudinary
+python-dotenv
+pyjwt
+pytz
+requests
