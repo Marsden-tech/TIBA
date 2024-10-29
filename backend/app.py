@@ -870,7 +870,7 @@ class MpesaAPI:
                 "PartyA": phone_number,
                 "PartyB": self.business_shortcode,
                 "PhoneNumber": phone_number,
-                "CallBackURL": "https://6d66-154-159-238-160.ngrok-free.app/mpesa-callback",
+                "CallBackURL": "https://tiba-backend.onrender.com/mpesa-callback",
                 "AccountReference": reference,
                 "TransactionDesc": f"Payment for Appointment {reference}"
             }
