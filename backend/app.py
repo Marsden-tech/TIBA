@@ -866,7 +866,7 @@ class MpesaAPI:
                 "Password": password,
                 "Timestamp": timestamp,
                 "TransactionType": "CustomerPayBillOnline",
-                "Amount": 1 ,#int(float(amount)),  # Convert Numeric to int
+                "Amount": int(float(amount)),  # Convert Numeric to int
                 "PartyA": phone_number,
                 "PartyB": self.business_shortcode,
                 "PhoneNumber": phone_number,
