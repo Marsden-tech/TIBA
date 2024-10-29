@@ -24,7 +24,7 @@ class Doc_address(db.Model, SerializerMixin):
 class Doctor(db.Model, SerializerMixin):
     __tablename__ = 'doctors'
 
-    serialize_rules = ( '-password','-address.doctors')
+    serialize_rules = ( '-password','-address.doctors', '-appointments')
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False)
@@ -73,7 +73,7 @@ class Doctor(db.Model, SerializerMixin):
 class User(db.Model, SerializerMixin):
     __tablename__ = 'users'
 
-    serialize_rules = ( '-password')
+    serialize_rules = ( '-password', '-appointments')
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False)
@@ -126,11 +126,11 @@ class Appointment(db.Model, SerializerMixin):
 
     __tablename__ = 'appointments'
 
-    serialize_rules = ( '-checkout_request_id', '-transaction_id', '-payment_details')
+    serialize_rules = ( '-checkout_request_id', '-transaction_id', '-payment_details', '-user.appointments', '-doc.appointments')
 
     id = db.Column(db.Integer, primary_key=True)
-    userId = db.Column(db.Integer, nullable=False)
-    docId = db.Column(db.Integer, nullable=False)
+    userId = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    docId = db.Column(db.Integer, db.ForeignKey('doctors.id'), nullable=False)
     slotDate = db.Column(db.String, nullable=False)
     slotTime = db.Column(db.String, nullable=False)
     userData = db.Column(db.JSON, nullable=False)
@@ -140,6 +140,9 @@ class Appointment(db.Model, SerializerMixin):
     cancelled = db.Column(db.Boolean, nullable=False, default=False)
     payment = db.Column(db.Boolean, nullable=False, default=False)
     isCompleted = db.Column(db.Boolean, nullable=False, default=False)
+
+    user = db.relationship('User', backref='appointments', lazy=True)
+    doc = db.relationship('Doctor', backref='appointments', lazy=True)
 
     #Mpesa integration fields
     checkout_request_id = db.Column(db.String, nullable=True)
